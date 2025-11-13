@@ -392,16 +392,37 @@ def create_tables_and_load_data():
             
             # Now delete rows that violate foreign key constraints
             print("  Removing records with invalid person or movie IDs...")
-            cur.execute("""
-                DELETE FROM ActsIn 
-                WHERE pid NOT IN (SELECT id FROM Person)
-                   OR mid NOT IN (SELECT id FROM Movie)
-            """)
-            deleted = cur.rowcount
-            conn.commit()
-            print(f"  Removed {deleted} records with invalid foreign keys")
-            actsin_count -= deleted
-            
+            # Create an index on mid to speed up the anti-join (mid-only lookups)
+            try:
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_actsin_mid ON ActsIn(mid)")
+                conn.commit()
+            except psycopg2.Error:
+                conn.rollback()
+
+            # Perform deletions in batches using ctid to avoid a huge transaction
+            total_deleted = 0
+            batch_limit = 100000
+            print("  Removing records with invalid person or movie IDs (batched)...")
+            while True:
+                cur.execute("""
+                    WITH to_delete AS (
+                        SELECT ctid FROM ActsIn a
+                        WHERE NOT EXISTS (SELECT 1 FROM Person p WHERE p.id = a.pid)
+                           OR NOT EXISTS (SELECT 1 FROM Movie  m WHERE m.id = a.mid)
+                        LIMIT %s
+                    )
+                    DELETE FROM ActsIn WHERE ctid IN (SELECT ctid FROM to_delete)
+                    RETURNING 1
+                """, (batch_limit,))
+                deleted = cur.rowcount
+                conn.commit()
+                if deleted == 0:
+                    break
+                total_deleted += deleted
+                print(f"  Progress: removed {total_deleted} records...", end='\r')
+
+            print(f"\n  Removed {total_deleted} records with invalid foreign keys")
+            actsin_count -= total_deleted
         except FileNotFoundError:
             print(f"✗ File not found: {actsin_file}")
         
@@ -458,16 +479,35 @@ def create_tables_and_load_data():
             
             # Remove records with invalid foreign keys
             print("  Removing records with invalid director or movie IDs...")
-            cur.execute("""
-                DELETE FROM Directs 
-                WHERE did NOT IN (SELECT id FROM Director)
-                   OR mid NOT IN (SELECT id FROM Movie)
-            """)
-            deleted = cur.rowcount
-            conn.commit()
-            print(f"  Removed {deleted} records with invalid foreign keys")
-            directs_count -= deleted
-            
+            # Create index on mid in Directs and delete in batches
+            try:
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_directs_mid ON Directs(mid)")
+                conn.commit()
+            except psycopg2.Error:
+                conn.rollback()
+
+            total_deleted = 0
+            batch_limit = 100000
+            while True:
+                cur.execute("""
+                    WITH to_delete AS (
+                        SELECT ctid FROM Directs d
+                        WHERE NOT EXISTS (SELECT 1 FROM Director r WHERE r.id = d.did)
+                           OR NOT EXISTS (SELECT 1 FROM Movie    m WHERE m.id = d.mid)
+                        LIMIT %s
+                    )
+                    DELETE FROM Directs WHERE ctid IN (SELECT ctid FROM to_delete)
+                    RETURNING 1
+                """, (batch_limit,))
+                deleted = cur.rowcount
+                conn.commit()
+                if deleted == 0:
+                    break
+                total_deleted += deleted
+                print(f"  Progress: removed {total_deleted} records...", end='\r')
+
+            print(f"\n  Removed {total_deleted} records with invalid foreign keys")
+            directs_count -= total_deleted
         except FileNotFoundError:
             print(f"✗ File not found: {directs_file}")
         
@@ -485,7 +525,7 @@ def create_tables_and_load_data():
         # Verify tables
         print("\nVerifying tables in moviesdb:")
         cur.execute("""
-            SELECT tablename FROM pg_catalog.pg_tables 
+            SELECT tablename FROM pg_catalog.pg_tables
             WHERE schemaname = 'public'
             ORDER BY tablename
         """)
