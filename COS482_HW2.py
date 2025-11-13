@@ -120,8 +120,9 @@ def create_tables_and_load_data():
         
         try:
             with open(movie_file, 'r', encoding='latin-1') as f:
+                next(f)  # Skip header line
                 for line in f:
-                    parts = line.strip().split('\t')
+                    parts = line.strip().split(',')
                     if len(parts) >= 4:
                         try:
                             movie_id = int(parts[0])
@@ -151,8 +152,9 @@ def create_tables_and_load_data():
         
         try:
             with open(person_file, 'r', encoding='latin-1') as f:
+                next(f)  # Skip header line
                 for line in f:
-                    parts = line.strip().split('\t')
+                    parts = line.strip().split(',')
                     if len(parts) >= 4:
                         try:
                             person_id = int(parts[0])
@@ -182,8 +184,9 @@ def create_tables_and_load_data():
         
         try:
             with open(director_file, 'r', encoding='latin-1') as f:
+                next(f)  # Skip header line
                 for line in f:
-                    parts = line.strip().split('\t')
+                    parts = line.strip().split(',')
                     if len(parts) >= 3:
                         try:
                             director_id = int(parts[0])
@@ -212,8 +215,9 @@ def create_tables_and_load_data():
         
         try:
             with open(actsin_file, 'r', encoding='latin-1') as f:
+                next(f)  # Skip header line
                 for line in f:
-                    parts = line.strip().split('\t')
+                    parts = line.strip().split(',')
                     if len(parts) >= 3:
                         try:
                             pid = int(parts[0])
@@ -242,8 +246,9 @@ def create_tables_and_load_data():
         
         try:
             with open(directs_file, 'r', encoding='latin-1') as f:
+                next(f)  # Skip header line
                 for line in f:
-                    parts = line.strip().split('\t')
+                    parts = line.strip().split(',')
                     if len(parts) >= 2:
                         try:
                             did = int(parts[0])
