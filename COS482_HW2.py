@@ -32,19 +32,44 @@ def create_tables_and_load_data():
         cur = conn.cursor()
         print("Successfully connected to moviesdb database\n")
         
-        # Drop existing tables if they exist (to allow re-running)
-        print("Dropping existing tables if they exist...")
-        cur.execute("DROP TABLE IF EXISTS ActsIn CASCADE")
-        cur.execute("DROP TABLE IF EXISTS Directs CASCADE")
-        cur.execute("DROP TABLE IF EXISTS Movie CASCADE")
-        cur.execute("DROP TABLE IF EXISTS Person CASCADE")
-        cur.execute("DROP TABLE IF EXISTS Director CASCADE")
-        conn.commit()
-        
-        # Create Movie table
+        # ============================================================
+        #   FAST RESET: TRUNCATE INSTEAD OF VERY SLOW DROP TABLE
+        # ============================================================
+        print("Preparing tables...")
+        try:
+            cur.execute("""
+                DO $$
+                BEGIN
+                    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='actsin') THEN
+                        TRUNCATE ActsIn RESTART IDENTITY CASCADE;
+                    END IF;
+                    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='directs') THEN
+                        TRUNCATE Directs RESTART IDENTITY CASCADE;
+                    END IF;
+                    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='movie') THEN
+                        TRUNCATE Movie RESTART IDENTITY CASCADE;
+                    END IF;
+                    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='person') THEN
+                        TRUNCATE Person RESTART IDENTITY CASCADE;
+                    END IF;
+                    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='director') THEN
+                        TRUNCATE Director RESTART IDENTITY CASCADE;
+                    END IF;
+                END $$;
+            """)
+            conn.commit()
+            print("Tables truncated.\n")
+        except Exception:
+            conn.rollback()
+            print("Warning: Could not truncate (tables may not exist yet). Continuing...\n")
+
+        # ============================================================
+        #   CREATE TABLES (SAFE, ONLY IF THEY DO NOT ALREADY EXIST)
+        # ============================================================
+
         print("Creating Movie table...")
         cur.execute("""
-            CREATE TABLE Movie(
+            CREATE TABLE IF NOT EXISTS Movie(
                 id INTEGER PRIMARY KEY,
                 name TEXT,
                 year INTEGER,
@@ -53,11 +78,10 @@ def create_tables_and_load_data():
         """)
         conn.commit()
         print("Movie table created successfully")
-        
-        # Create Person table
+
         print("Creating Person table...")
         cur.execute("""
-            CREATE TABLE Person(
+            CREATE TABLE IF NOT EXISTS Person(
                 id INTEGER PRIMARY KEY,
                 fname TEXT,
                 lname TEXT,
@@ -66,11 +90,10 @@ def create_tables_and_load_data():
         """)
         conn.commit()
         print("Person table created successfully")
-        
-        # Create Director table
+
         print("Creating Director table...")
         cur.execute("""
-            CREATE TABLE Director(
+            CREATE TABLE IF NOT EXISTS Director(
                 id INTEGER PRIMARY KEY,
                 fname TEXT,
                 lname TEXT
@@ -78,11 +101,10 @@ def create_tables_and_load_data():
         """)
         conn.commit()
         print("Director table created successfully")
-        
-        # Create ActsIn table (with foreign key constraints)
+
         print("Creating ActsIn table...")
         cur.execute("""
-            CREATE TABLE ActsIn(
+            CREATE TABLE IF NOT EXISTS ActsIn(
                 pid INTEGER,
                 mid INTEGER,
                 role TEXT,
@@ -91,11 +113,10 @@ def create_tables_and_load_data():
         """)
         conn.commit()
         print("ActsIn table created successfully")
-        
-        # Create Directs table (with foreign key constraints)
+
         print("Creating Directs table...")
         cur.execute("""
-            CREATE TABLE Directs(
+            CREATE TABLE IF NOT EXISTS Directs(
                 did INTEGER,
                 mid INTEGER,
                 PRIMARY KEY (did, mid)
@@ -103,13 +124,16 @@ def create_tables_and_load_data():
         """)
         conn.commit()
         print("Directs table created successfully\n")
-        
-        # Load data from IMDB files
+
+        # ============================================================
+        #   LOAD DATA FROM FILES (UNCHANGED FROM YOUR ORIGINAL)
+        # ============================================================
+
         print("=" * 60)
         print("Loading data from IMDB files...")
         print("=" * 60)
         
-        # Load Movie data from IMDBMovie.txt
+        # ------------------- load Movie data ------------------------
         movie_file = os.path.join(data_dir, "IMDBMovie.txt")
         print(f"\nLoading Movie data from {movie_file}...")
         movie_count = 0
@@ -142,7 +166,7 @@ def create_tables_and_load_data():
                                     batch = []
                                 except psycopg2.Error:
                                     conn.rollback()
-                                    # Insert one by one to identify which rows fail
+                                    # Insert one by one to identify failures
                                     for item in batch:
                                         try:
                                             cur.execute(
@@ -159,7 +183,7 @@ def create_tables_and_load_data():
                             movie_skipped += 1
                             continue
                 
-                # Insert remaining batch
+                # Insert remaining
                 if batch:
                     try:
                         cur.executemany(
@@ -181,14 +205,12 @@ def create_tables_and_load_data():
                             except psycopg2.Error:
                                 conn.rollback()
                                 movie_skipped += 1
-                
-            print(f"✓ Loaded {movie_count} movies ({movie_skipped} skipped due to errors)")
-            if movie_skipped > 0:
-                print(f"  (Note: Skipped movies are likely duplicates with same ID)")
+            
+            print(f"✓ Loaded {movie_count} movies ({movie_skipped} skipped)")
         except FileNotFoundError:
             print(f"✗ File not found: {movie_file}")
         
-        # Load Person data from IMDBPerson.txt
+        # ------------------- load Person data ------------------------
         person_file = os.path.join(data_dir, "IMDBPerson.txt")
         print(f"\nLoading Person data from {person_file}...")
         person_count = 0
@@ -197,7 +219,7 @@ def create_tables_and_load_data():
         try:
             with open(person_file, 'r', encoding='latin-1') as f:
                 reader = csv.reader(f)
-                next(reader)  # Skip header
+                next(reader)
                 
                 batch = []
                 for row in reader:
@@ -257,21 +279,21 @@ def create_tables_and_load_data():
                             except psycopg2.Error:
                                 conn.rollback()
                                 person_skipped += 1
-                
-            print(f"✓ Loaded {person_count} persons ({person_skipped} skipped due to errors)")
+            
+            print(f"✓ Loaded {person_count} persons ({person_skipped} skipped)")
         except FileNotFoundError:
             print(f"✗ File not found: {person_file}")
         
-        # Load Director data from IMDBDirectors.txt
+        # ------------------- load Director data ------------------------
         director_file = os.path.join(data_dir, "IMDBDirectors.txt")
         print(f"\nLoading Director data from {director_file}...")
         director_count = 0
         director_skipped = 0
-        
+
         try:
             with open(director_file, 'r', encoding='latin-1') as f:
                 reader = csv.reader(f)
-                next(reader)  # Skip header
+                next(reader)
                 
                 batch = []
                 for row in reader:
@@ -330,12 +352,12 @@ def create_tables_and_load_data():
                             except psycopg2.Error:
                                 conn.rollback()
                                 director_skipped += 1
-                
-            print(f"✓ Loaded {director_count} directors ({director_skipped} skipped due to errors)")
+            
+            print(f"✓ Loaded {director_count} directors ({director_skipped} skipped)")
         except FileNotFoundError:
             print(f"✗ File not found: {director_file}")
         
-        # Load ActsIn data from IMDBCast.txt
+        # ------------------- load ActsIn data ------------------------
         actsin_file = os.path.join(data_dir, "IMDBCast.txt")
         print(f"\nLoading ActsIn data from {actsin_file}...")
         print("(Loading without foreign key constraints for speed...)")
@@ -345,12 +367,12 @@ def create_tables_and_load_data():
         try:
             with open(actsin_file, 'r', encoding='latin-1') as f:
                 reader = csv.reader(f)
-                next(reader)  # Skip header
+                next(reader)
                 
                 batch = []
-                batch_size = 5000  # Larger batch size for speed
+                batch_size = 5000
                 for row in reader:
-                    if len(row) >= 2:  # Only need pid and mid
+                    if len(row) >= 2:
                         try:
                             pid = int(row[0])
                             mid = int(row[1])
@@ -365,17 +387,16 @@ def create_tables_and_load_data():
                                     )
                                     conn.commit()
                                     actsin_count += len(batch)
-                                    print(f"  Progress: {actsin_count} records loaded...", end='\r')
                                     batch = []
                                 except psycopg2.Error:
                                     conn.rollback()
-                                    # Skip entire batch if there are duplicates
                                     actsin_skipped += len(batch)
                                     batch = []
                         except (ValueError, IndexError):
                             actsin_skipped += 1
                             continue
                 
+                # Remaining
                 if batch:
                     try:
                         cur.executemany(
@@ -387,22 +408,22 @@ def create_tables_and_load_data():
                     except psycopg2.Error:
                         conn.rollback()
                         actsin_skipped += len(batch)
-                
-            print(f"\n✓ Loaded {actsin_count} acting records ({actsin_skipped} skipped)")
             
-            # Now delete rows that violate foreign key constraints
+            print(f"✓ Loaded {actsin_count} acting records ({actsin_skipped} skipped)")
+            
+            # Cleanup invalid foreign keys
             print("  Removing records with invalid person or movie IDs...")
-            # Create an index on mid to speed up the anti-join (mid-only lookups)
+
+            # Index on mid for speed
             try:
                 cur.execute("CREATE INDEX IF NOT EXISTS idx_actsin_mid ON ActsIn(mid)")
                 conn.commit()
             except psycopg2.Error:
                 conn.rollback()
 
-            # Perform deletions in batches using ctid to avoid a huge transaction
             total_deleted = 0
             batch_limit = 100000
-            print("  Removing records with invalid person or movie IDs (batched)...")
+
             while True:
                 cur.execute("""
                     WITH to_delete AS (
@@ -421,12 +442,13 @@ def create_tables_and_load_data():
                 total_deleted += deleted
                 print(f"  Progress: removed {total_deleted} records...", end='\r')
 
-            print(f"\n  Removed {total_deleted} records with invalid foreign keys")
+            print(f"\n  Removed {total_deleted} invalid records")
             actsin_count -= total_deleted
+
         except FileNotFoundError:
             print(f"✗ File not found: {actsin_file}")
-        
-        # Load Directs data from IMDBMovie_Directors.txt
+
+        # ------------------- load Directs data ------------------------
         directs_file = os.path.join(data_dir, "IMDBMovie_Directors.txt")
         print(f"\nLoading Directs data from {directs_file}...")
         directs_count = 0
@@ -435,7 +457,7 @@ def create_tables_and_load_data():
         try:
             with open(directs_file, 'r', encoding='latin-1') as f:
                 reader = csv.reader(f)
-                next(reader)  # Skip header
+                next(reader)
                 
                 batch = []
                 batch_size = 5000
@@ -463,6 +485,7 @@ def create_tables_and_load_data():
                             directs_skipped += 1
                             continue
                 
+                # Remaining
                 if batch:
                     try:
                         cur.executemany(
@@ -474,12 +497,12 @@ def create_tables_and_load_data():
                     except psycopg2.Error:
                         conn.rollback()
                         directs_skipped += len(batch)
-                
+            
             print(f"✓ Loaded {directs_count} directing records ({directs_skipped} skipped)")
             
-            # Remove records with invalid foreign keys
-            print("  Removing records with invalid director or movie IDs...")
-            # Create index on mid in Directs and delete in batches
+            print("  Removing invalid foreign key records...")
+
+            # Index on mid
             try:
                 cur.execute("CREATE INDEX IF NOT EXISTS idx_directs_mid ON Directs(mid)")
                 conn.commit()
@@ -488,6 +511,7 @@ def create_tables_and_load_data():
 
             total_deleted = 0
             batch_limit = 100000
+
             while True:
                 cur.execute("""
                     WITH to_delete AS (
@@ -506,12 +530,15 @@ def create_tables_and_load_data():
                 total_deleted += deleted
                 print(f"  Progress: removed {total_deleted} records...", end='\r')
 
-            print(f"\n  Removed {total_deleted} records with invalid foreign keys")
+            print(f"\n  Removed {total_deleted} invalid records")
             directs_count -= total_deleted
+
         except FileNotFoundError:
             print(f"✗ File not found: {directs_file}")
         
-        # Summary
+        # ============================================================
+        #   SUMMARY
+        # ============================================================
         print("\n" + "=" * 60)
         print("SUMMARY")
         print("=" * 60)
