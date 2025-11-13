@@ -133,12 +133,12 @@ def create_tables_and_load_data():
                                 "INSERT INTO Movie (id, name, year, rank) VALUES (%s, %s, %s, %s)",
                                 (movie_id, name, year, rank)
                             )
+                            conn.commit()
                             movie_count += 1
-                        except (ValueError, errors.UniqueViolation) as e:
+                        except (ValueError, errors.UniqueViolation, psycopg2.Error) as e:
                             movie_skipped += 1
                             conn.rollback()
                             continue
-            conn.commit()
             print(f"✓ Loaded {movie_count} movies ({movie_skipped} skipped due to errors)")
         except FileNotFoundError:
             print(f"✗ File not found: {movie_file}")
@@ -164,12 +164,12 @@ def create_tables_and_load_data():
                                 "INSERT INTO Person (id, fname, lname, gender) VALUES (%s, %s, %s, %s)",
                                 (person_id, fname, lname, gender)
                             )
+                            conn.commit()
                             person_count += 1
-                        except (ValueError, errors.UniqueViolation) as e:
+                        except (ValueError, errors.UniqueViolation, psycopg2.Error) as e:
                             person_skipped += 1
                             conn.rollback()
                             continue
-            conn.commit()
             print(f"✓ Loaded {person_count} persons ({person_skipped} skipped due to errors)")
         except FileNotFoundError:
             print(f"✗ File not found: {person_file}")
@@ -194,12 +194,12 @@ def create_tables_and_load_data():
                                 "INSERT INTO Director (id, fname, lname) VALUES (%s, %s, %s)",
                                 (director_id, fname, lname)
                             )
+                            conn.commit()
                             director_count += 1
-                        except (ValueError, errors.UniqueViolation) as e:
+                        except (ValueError, errors.UniqueViolation, psycopg2.Error) as e:
                             director_skipped += 1
                             conn.rollback()
                             continue
-            conn.commit()
             print(f"✓ Loaded {director_count} directors ({director_skipped} skipped due to errors)")
         except FileNotFoundError:
             print(f"✗ File not found: {director_file}")
@@ -224,12 +224,12 @@ def create_tables_and_load_data():
                                 "INSERT INTO ActsIn (pid, mid, role) VALUES (%s, %s, %s)",
                                 (pid, mid, role)
                             )
+                            conn.commit()
                             actsin_count += 1
-                        except (ValueError, errors.UniqueViolation, errors.ForeignKeyViolation) as e:
+                        except (ValueError, errors.UniqueViolation, errors.ForeignKeyViolation, psycopg2.Error) as e:
                             actsin_skipped += 1
                             conn.rollback()
                             continue
-            conn.commit()
             print(f"✓ Loaded {actsin_count} acting records ({actsin_skipped} skipped due to errors)")
         except FileNotFoundError:
             print(f"✗ File not found: {actsin_file}")
@@ -253,12 +253,12 @@ def create_tables_and_load_data():
                                 "INSERT INTO Directs (did, mid) VALUES (%s, %s)",
                                 (did, mid)
                             )
+                            conn.commit()
                             directs_count += 1
-                        except (ValueError, errors.UniqueViolation, errors.ForeignKeyViolation) as e:
+                        except (ValueError, errors.UniqueViolation, errors.ForeignKeyViolation, psycopg2.Error) as e:
                             directs_skipped += 1
                             conn.rollback()
                             continue
-            conn.commit()
             print(f"✓ Loaded {directs_count} directing records ({directs_skipped} skipped due to errors)")
         except FileNotFoundError:
             print(f"✗ File not found: {directs_file}")
