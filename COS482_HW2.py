@@ -2,6 +2,7 @@ import psycopg2
 from psycopg2 import errors
 import getpass
 import os
+import csv
 
 def create_tables_and_load_data():
     """
@@ -120,26 +121,71 @@ def create_tables_and_load_data():
         
         try:
             with open(movie_file, 'r', encoding='latin-1') as f:
-                next(f)  # Skip header line
-                for line in f:
-                    parts = line.strip().split(',')
-                    if len(parts) >= 4:
+                reader = csv.reader(f)
+                next(reader)  # Skip header
+                
+                batch = []
+                for row in reader:
+                    if len(row) >= 4:
                         try:
-                            movie_id = int(parts[0])
-                            name = parts[1]
-                            year = int(parts[2]) if parts[2] else None
-                            rank = float(parts[3]) if parts[3] else None
+                            movie_id = int(row[0])
+                            name = row[1]
+                            year = int(row[2]) if row[2] else None
+                            rank = float(row[3]) if row[3] else None
+                            batch.append((movie_id, name, year, rank))
                             
-                            cur.execute(
-                                "INSERT INTO Movie (id, name, year, rank) VALUES (%s, %s, %s, %s)",
-                                (movie_id, name, year, rank)
-                            )
-                            conn.commit()
-                            movie_count += 1
-                        except (ValueError, errors.UniqueViolation, psycopg2.Error) as e:
+                            # Batch insert every 1000 rows
+                            if len(batch) >= 1000:
+                                try:
+                                    cur.executemany(
+                                        "INSERT INTO Movie (id, name, year, rank) VALUES (%s, %s, %s, %s)",
+                                        batch
+                                    )
+                                    conn.commit()
+                                    movie_count += len(batch)
+                                    batch = []
+                                except psycopg2.Error:
+                                    conn.rollback()
+                                    # Insert one by one to identify which rows fail
+                                    for item in batch:
+                                        try:
+                                            cur.execute(
+                                                "INSERT INTO Movie (id, name, year, rank) VALUES (%s, %s, %s, %s)",
+                                                item
+                                            )
+                                            conn.commit()
+                                            movie_count += 1
+                                        except psycopg2.Error:
+                                            conn.rollback()
+                                            movie_skipped += 1
+                                    batch = []
+                        except (ValueError, IndexError):
                             movie_skipped += 1
-                            conn.rollback()
                             continue
+                
+                # Insert remaining batch
+                if batch:
+                    try:
+                        cur.executemany(
+                            "INSERT INTO Movie (id, name, year, rank) VALUES (%s, %s, %s, %s)",
+                            batch
+                        )
+                        conn.commit()
+                        movie_count += len(batch)
+                    except psycopg2.Error:
+                        conn.rollback()
+                        for item in batch:
+                            try:
+                                cur.execute(
+                                    "INSERT INTO Movie (id, name, year, rank) VALUES (%s, %s, %s, %s)",
+                                    item
+                                )
+                                conn.commit()
+                                movie_count += 1
+                            except psycopg2.Error:
+                                conn.rollback()
+                                movie_skipped += 1
+                
             print(f"✓ Loaded {movie_count} movies ({movie_skipped} skipped due to errors)")
         except FileNotFoundError:
             print(f"✗ File not found: {movie_file}")
@@ -152,26 +198,68 @@ def create_tables_and_load_data():
         
         try:
             with open(person_file, 'r', encoding='latin-1') as f:
-                next(f)  # Skip header line
-                for line in f:
-                    parts = line.strip().split(',')
-                    if len(parts) >= 4:
+                reader = csv.reader(f)
+                next(reader)  # Skip header
+                
+                batch = []
+                for row in reader:
+                    if len(row) >= 4:
                         try:
-                            person_id = int(parts[0])
-                            fname = parts[1]
-                            lname = parts[2]
-                            gender = parts[3]
+                            person_id = int(row[0])
+                            fname = row[1]
+                            lname = row[2]
+                            gender = row[3]
+                            batch.append((person_id, fname, lname, gender))
                             
-                            cur.execute(
-                                "INSERT INTO Person (id, fname, lname, gender) VALUES (%s, %s, %s, %s)",
-                                (person_id, fname, lname, gender)
-                            )
-                            conn.commit()
-                            person_count += 1
-                        except (ValueError, errors.UniqueViolation, psycopg2.Error) as e:
+                            if len(batch) >= 1000:
+                                try:
+                                    cur.executemany(
+                                        "INSERT INTO Person (id, fname, lname, gender) VALUES (%s, %s, %s, %s)",
+                                        batch
+                                    )
+                                    conn.commit()
+                                    person_count += len(batch)
+                                    batch = []
+                                except psycopg2.Error:
+                                    conn.rollback()
+                                    for item in batch:
+                                        try:
+                                            cur.execute(
+                                                "INSERT INTO Person (id, fname, lname, gender) VALUES (%s, %s, %s, %s)",
+                                                item
+                                            )
+                                            conn.commit()
+                                            person_count += 1
+                                        except psycopg2.Error:
+                                            conn.rollback()
+                                            person_skipped += 1
+                                    batch = []
+                        except (ValueError, IndexError):
                             person_skipped += 1
-                            conn.rollback()
                             continue
+                
+                if batch:
+                    try:
+                        cur.executemany(
+                            "INSERT INTO Person (id, fname, lname, gender) VALUES (%s, %s, %s, %s)",
+                            batch
+                        )
+                        conn.commit()
+                        person_count += len(batch)
+                    except psycopg2.Error:
+                        conn.rollback()
+                        for item in batch:
+                            try:
+                                cur.execute(
+                                    "INSERT INTO Person (id, fname, lname, gender) VALUES (%s, %s, %s, %s)",
+                                    item
+                                )
+                                conn.commit()
+                                person_count += 1
+                            except psycopg2.Error:
+                                conn.rollback()
+                                person_skipped += 1
+                
             print(f"✓ Loaded {person_count} persons ({person_skipped} skipped due to errors)")
         except FileNotFoundError:
             print(f"✗ File not found: {person_file}")
@@ -184,25 +272,67 @@ def create_tables_and_load_data():
         
         try:
             with open(director_file, 'r', encoding='latin-1') as f:
-                next(f)  # Skip header line
-                for line in f:
-                    parts = line.strip().split(',')
-                    if len(parts) >= 3:
+                reader = csv.reader(f)
+                next(reader)  # Skip header
+                
+                batch = []
+                for row in reader:
+                    if len(row) >= 3:
                         try:
-                            director_id = int(parts[0])
-                            fname = parts[1]
-                            lname = parts[2]
+                            director_id = int(row[0])
+                            fname = row[1]
+                            lname = row[2]
+                            batch.append((director_id, fname, lname))
                             
-                            cur.execute(
-                                "INSERT INTO Director (id, fname, lname) VALUES (%s, %s, %s)",
-                                (director_id, fname, lname)
-                            )
-                            conn.commit()
-                            director_count += 1
-                        except (ValueError, errors.UniqueViolation, psycopg2.Error) as e:
+                            if len(batch) >= 1000:
+                                try:
+                                    cur.executemany(
+                                        "INSERT INTO Director (id, fname, lname) VALUES (%s, %s, %s)",
+                                        batch
+                                    )
+                                    conn.commit()
+                                    director_count += len(batch)
+                                    batch = []
+                                except psycopg2.Error:
+                                    conn.rollback()
+                                    for item in batch:
+                                        try:
+                                            cur.execute(
+                                                "INSERT INTO Director (id, fname, lname) VALUES (%s, %s, %s)",
+                                                item
+                                            )
+                                            conn.commit()
+                                            director_count += 1
+                                        except psycopg2.Error:
+                                            conn.rollback()
+                                            director_skipped += 1
+                                    batch = []
+                        except (ValueError, IndexError):
                             director_skipped += 1
-                            conn.rollback()
                             continue
+                
+                if batch:
+                    try:
+                        cur.executemany(
+                            "INSERT INTO Director (id, fname, lname) VALUES (%s, %s, %s)",
+                            batch
+                        )
+                        conn.commit()
+                        director_count += len(batch)
+                    except psycopg2.Error:
+                        conn.rollback()
+                        for item in batch:
+                            try:
+                                cur.execute(
+                                    "INSERT INTO Director (id, fname, lname) VALUES (%s, %s, %s)",
+                                    item
+                                )
+                                conn.commit()
+                                director_count += 1
+                            except psycopg2.Error:
+                                conn.rollback()
+                                director_skipped += 1
+                
             print(f"✓ Loaded {director_count} directors ({director_skipped} skipped due to errors)")
         except FileNotFoundError:
             print(f"✗ File not found: {director_file}")
@@ -210,31 +340,75 @@ def create_tables_and_load_data():
         # Load ActsIn data from IMDBCast.txt
         actsin_file = os.path.join(data_dir, "IMDBCast.txt")
         print(f"\nLoading ActsIn data from {actsin_file}...")
+        print("(This may take a while due to foreign key checks...)")
         actsin_count = 0
         actsin_skipped = 0
         
         try:
             with open(actsin_file, 'r', encoding='latin-1') as f:
-                next(f)  # Skip header line
-                for line in f:
-                    parts = line.strip().split(',')
-                    if len(parts) >= 3:
+                reader = csv.reader(f)
+                next(reader)  # Skip header
+                
+                batch = []
+                for row in reader:
+                    if len(row) >= 3:
                         try:
-                            pid = int(parts[0])
-                            mid = int(parts[1])
-                            role = parts[2]
+                            pid = int(row[0])
+                            mid = int(row[1])
+                            role = row[2] if len(row) > 2 else ''
+                            batch.append((pid, mid, role))
                             
-                            cur.execute(
-                                "INSERT INTO ActsIn (pid, mid, role) VALUES (%s, %s, %s)",
-                                (pid, mid, role)
-                            )
-                            conn.commit()
-                            actsin_count += 1
-                        except (ValueError, errors.UniqueViolation, errors.ForeignKeyViolation, psycopg2.Error) as e:
+                            if len(batch) >= 1000:
+                                try:
+                                    cur.executemany(
+                                        "INSERT INTO ActsIn (pid, mid, role) VALUES (%s, %s, %s)",
+                                        batch
+                                    )
+                                    conn.commit()
+                                    actsin_count += len(batch)
+                                    print(f"  Progress: {actsin_count} records loaded...", end='\r')
+                                    batch = []
+                                except psycopg2.Error:
+                                    conn.rollback()
+                                    for item in batch:
+                                        try:
+                                            cur.execute(
+                                                "INSERT INTO ActsIn (pid, mid, role) VALUES (%s, %s, %s)",
+                                                item
+                                            )
+                                            conn.commit()
+                                            actsin_count += 1
+                                        except psycopg2.Error:
+                                            conn.rollback()
+                                            actsin_skipped += 1
+                                    batch = []
+                        except (ValueError, IndexError):
                             actsin_skipped += 1
-                            conn.rollback()
                             continue
-            print(f"✓ Loaded {actsin_count} acting records ({actsin_skipped} skipped due to errors)")
+                
+                if batch:
+                    try:
+                        cur.executemany(
+                            "INSERT INTO ActsIn (pid, mid, role) VALUES (%s, %s, %s)",
+                            batch
+                        )
+                        conn.commit()
+                        actsin_count += len(batch)
+                    except psycopg2.Error:
+                        conn.rollback()
+                        for item in batch:
+                            try:
+                                cur.execute(
+                                    "INSERT INTO ActsIn (pid, mid, role) VALUES (%s, %s, %s)",
+                                    item
+                                )
+                                conn.commit()
+                                actsin_count += 1
+                            except psycopg2.Error:
+                                conn.rollback()
+                                actsin_skipped += 1
+                
+            print(f"\n✓ Loaded {actsin_count} acting records ({actsin_skipped} skipped due to errors)")
         except FileNotFoundError:
             print(f"✗ File not found: {actsin_file}")
         
@@ -246,24 +420,66 @@ def create_tables_and_load_data():
         
         try:
             with open(directs_file, 'r', encoding='latin-1') as f:
-                next(f)  # Skip header line
-                for line in f:
-                    parts = line.strip().split(',')
-                    if len(parts) >= 2:
+                reader = csv.reader(f)
+                next(reader)  # Skip header
+                
+                batch = []
+                for row in reader:
+                    if len(row) >= 2:
                         try:
-                            did = int(parts[0])
-                            mid = int(parts[1])
+                            did = int(row[0])
+                            mid = int(row[1])
+                            batch.append((did, mid))
                             
-                            cur.execute(
-                                "INSERT INTO Directs (did, mid) VALUES (%s, %s)",
-                                (did, mid)
-                            )
-                            conn.commit()
-                            directs_count += 1
-                        except (ValueError, errors.UniqueViolation, errors.ForeignKeyViolation, psycopg2.Error) as e:
+                            if len(batch) >= 1000:
+                                try:
+                                    cur.executemany(
+                                        "INSERT INTO Directs (did, mid) VALUES (%s, %s)",
+                                        batch
+                                    )
+                                    conn.commit()
+                                    directs_count += len(batch)
+                                    batch = []
+                                except psycopg2.Error:
+                                    conn.rollback()
+                                    for item in batch:
+                                        try:
+                                            cur.execute(
+                                                "INSERT INTO Directs (did, mid) VALUES (%s, %s)",
+                                                item
+                                            )
+                                            conn.commit()
+                                            directs_count += 1
+                                        except psycopg2.Error:
+                                            conn.rollback()
+                                            directs_skipped += 1
+                                    batch = []
+                        except (ValueError, IndexError):
                             directs_skipped += 1
-                            conn.rollback()
                             continue
+                
+                if batch:
+                    try:
+                        cur.executemany(
+                            "INSERT INTO Directs (did, mid) VALUES (%s, %s)",
+                            batch
+                        )
+                        conn.commit()
+                        directs_count += len(batch)
+                    except psycopg2.Error:
+                        conn.rollback()
+                        for item in batch:
+                            try:
+                                cur.execute(
+                                    "INSERT INTO Directs (did, mid) VALUES (%s, %s)",
+                                    item
+                                )
+                                conn.commit()
+                                directs_count += 1
+                            except psycopg2.Error:
+                                conn.rollback()
+                                directs_skipped += 1
+                
             print(f"✓ Loaded {directs_count} directing records ({directs_skipped} skipped due to errors)")
         except FileNotFoundError:
             print(f"✗ File not found: {directs_file}")
