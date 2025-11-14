@@ -25,8 +25,7 @@ def create_tables_and_load_data():
     try:
         conn = psycopg2.connect(
             host="localhost",
-            #dbname="moviesdb", uncomment this before submission
-            dbname="moviesdb3",#for testing purposes, delete before submission
+            dbname="moviesdb",
             user="postgres",
             password=db_password
         )
