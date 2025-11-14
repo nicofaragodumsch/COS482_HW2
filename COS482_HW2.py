@@ -25,8 +25,8 @@ def create_tables_and_load_data():
     try:
         conn = psycopg2.connect(
             host="localhost",
-            #dbname="moviesdb", make a temp database to avoid drop issues
-            dbname="moviesdb2",
+            #dbname="moviesdb", uncomment this before submission
+            dbname="moviesdb3",
             user="postgres",
             password=db_password
         )
@@ -422,10 +422,18 @@ def create_tables_and_load_data():
             
             # Now delete rows that violate foreign key constraints
             print("  Removing records with invalid person or movie IDs...")
+            print("  (Creating indexes to speed up deletion...)")
+            
+            # Create indexes on foreign key columns for faster lookups
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_actsin_pid ON ActsIn(pid)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_actsin_mid ON ActsIn(mid)")
+            conn.commit()
+            
+            # Use NOT EXISTS which is faster than NOT IN for large datasets
             cur.execute("""
-                DELETE FROM ActsIn 
-                WHERE pid NOT IN (SELECT id FROM Person)
-                   OR mid NOT IN (SELECT id FROM Movie)
+                DELETE FROM ActsIn a
+                WHERE NOT EXISTS (SELECT 1 FROM Person p WHERE p.id = a.pid)
+                   OR NOT EXISTS (SELECT 1 FROM Movie m WHERE m.id = a.mid)
             """)
             deleted = cur.rowcount
             conn.commit()
@@ -519,10 +527,18 @@ def create_tables_and_load_data():
             
             # Remove records with invalid foreign keys
             print("  Removing records with invalid director or movie IDs...")
+            print("  (Creating indexes to speed up deletion...)")
+            
+            # Create indexes for faster lookups
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_directs_did ON Directs(did)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_directs_mid ON Directs(mid)")
+            conn.commit()
+            
+            # Use NOT EXISTS which is faster than NOT IN
             cur.execute("""
-                DELETE FROM Directs 
-                WHERE did NOT IN (SELECT id FROM Director)
-                   OR mid NOT IN (SELECT id FROM Movie)
+                DELETE FROM Directs d
+                WHERE NOT EXISTS (SELECT 1 FROM Director r WHERE r.id = d.did)
+                   OR NOT EXISTS (SELECT 1 FROM Movie m WHERE m.id = d.mid)
             """)
             deleted = cur.rowcount
             conn.commit()
