@@ -1,0 +1,117 @@
+================================================================================
+(a) Persons who acted in both second half of 19th and first half of 20th century
+================================================================================
+ID         First Name           Last Name            Gender    
+--------------------------------------------------------------------------------
+44788      J. Stuart            Blackton             M         
+90405      William F.           Cody                 M         
+94001      Chuck (II)           Connors              M         
+95960      James J.             Corbett              M         
+98595      William              Courtenay            M         
+120585     George (I)           Dewey                M         
+133898     Porfirio (I)         Díaz                 M         
+173723     Paul (I)             Gilmore              M         
+183621     Tom (I)              Green                M         
+205178     Cecil M.             Hepworth             M         
+
+Total rows: 10
+
+================================================================================
+(b) Directors who directed a film in a leap year
+================================================================================
+ID         First Name           Last Name           
+--------------------------------------------------------------------------------
+1          Todd                 1                   
+5          Khairiya             A-Mansour           
+8          Kodanda Rami Reddy   A.                  
+14         Mang                 Aag                 
+17         Safdar               Aah                 
+22         Veikko               Aaltonen            
+23         Pål                  Aam                 
+26         Douglas              Aarniokoski         
+31         Paul                 Aaron               
+37         Jamel                Aattache            
+
+Total rows: 10
+
+================================================================================
+(c) Top 10 movies with same year as 'Shrek (2001)' but better rank
+================================================================================
+ID         Name                                               Year       Rank      
+--------------------------------------------------------------------------------
+346246     Undercover X (2001)                                2001       10.00     
+374517     Zenith (2001)                                      2001       9.90      
+58084      Cerebrium (2001)                                   2001       9.70      
+277703     Richard Roe (2001)                                 2001       9.70      
+137709     Halo (2001)                                        2001       9.70      
+302296     Simulacra (2001)                                   2001       9.70      
+54879      Card Sharks (2001/II)                              2001       9.60      
+277945     Rider Pride (2001)                                 2001       9.50      
+232019     Night of a Thousand Screams (2001)                 2001       9.50      
+105587     Examen (2001)                                      2001       9.40      
+
+Total rows: 10
+
+================================================================================
+(d) Top 10 directors by number of films directed
+================================================================================
+ID         First Name           Last Name            # Films   
+--------------------------------------------------------------------------------
+25116      Dave                 Fleischer            501       
+41763      Seymour              Kneitel              279       
+56530      Georges              Méliès               266       
+26173      Friz                 Freleng              261       
+85279      Jules                White                247       
+38415      Chuck (I)            Jones                235       
+57599      Sam (I)              Newfield             223       
+44488      Walter               Lantz                219       
+57671      Wui                  Ng                   210       
+30570      D.W.                 Griffith             209       
+
+Total rows: 10
+
+================================================================================
+(e) Movies with LARGEST number of actors
+================================================================================
+ID         Name                                               Year       # Actors  
+--------------------------------------------------------------------------------
+20625      Around the World in Eighty Days (1956)             1956       1274      
+
+Total rows: 1
+
+================================================================================
+(e) Movies with SMALLEST number of actors
+================================================================================
+ID         Name                                               Year       # Actors  
+--------------------------------------------------------------------------------
+47         '88 Dodge Aries (2002)                             2002       1         
+102        'Elf' Jukebox (2004)                               2004       1         
+255        'Tags': A Short Film (1995)                        1995       1         
+268        'Tis Mother! (1912)                                1912       1         
+273        'Tis the Season to Be Smurfy (1984)                1984       1         
+297        'What's Your 'I.Q.'?' Number Two (1940)            1940       1         
+326        * FDR (1982)                                       1982       1         
+338        ...A Valparaso (1962)                              1962       1         
+367        ...But I Was a Girl: The Story of Frieda Belinfante (1999) 1999       1         
+438        ...Remote... Remote... (1973)                      1973       1         
+
+Total rows: 10
+
+================================================================================
+(f) Actors who worked with at least 10 distinct directors
+================================================================================
+ID         First Name           Last Name            # Directors 
+--------------------------------------------------------------------------------
+506067     Frank                Welker               311         
+621468     Bess                 Flowers              252         
+372839     Lee                  Phelps               226         
+704525     Tress                MacNeille            225         
+490345     Robert (I)           Vaughn               221         
+304920     Tim (I)              Matheson             220         
+749734     Lalita               Pawar                219         
+444807     William (I)          Smith                217         
+589311     Marcia               Cross                215         
+421983     John                 Saxon                212         
+
+Total rows: 10
+

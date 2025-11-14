@@ -1,0 +1,82 @@
+-- SQL Queries for Task 3
+
+-- (a) Persons who acted in both second half of 19th and first half of 20th century
+SELECT DISTINCT p.id, p.fname, p.lname, p.gender
+FROM Person p
+WHERE EXISTS (
+    SELECT 1 
+    FROM ActsIn a1
+    JOIN Movie m1 ON a1.mid = m1.id
+    WHERE a1.pid = p.id 
+      AND m1.year >= 1850 
+      AND m1.year < 1900
+)
+AND EXISTS (
+    SELECT 1 
+    FROM ActsIn a2
+    JOIN Movie m2 ON a2.mid = m2.id
+    WHERE a2.pid = p.id 
+      AND m2.year >= 1900 
+      AND m2.year < 1950
+)
+LIMIT 10;
+
+-- (b) Directors who directed a film in a leap year
+SELECT DISTINCT d.id, d.fname, d.lname
+FROM Director d
+JOIN Directs dr ON d.id = dr.did
+JOIN Movie m ON dr.mid = m.id
+WHERE m.year IS NOT NULL
+  AND (m.year % 4 = 0 AND (m.year % 100 != 0 OR m.year % 400 = 0))
+LIMIT 10;
+
+-- (c) Top 10 movies with same year as 'Shrek (2001)' but better rank
+SELECT m.id, m.name, m.year, m.rank
+FROM Movie m
+WHERE m.year = (SELECT year FROM Movie WHERE name = 'Shrek (2001)')
+  AND m.rank > (SELECT rank FROM Movie WHERE name = 'Shrek (2001)')
+ORDER BY m.rank DESC
+LIMIT 10;
+
+-- (d) Top 10 directors by number of films directed
+SELECT d.id, d.fname, d.lname, COUNT(dr.mid) AS num_films
+FROM Director d
+JOIN Directs dr ON d.id = dr.did
+GROUP BY d.id, d.fname, d.lname
+ORDER BY num_films DESC
+LIMIT 10;
+
+-- (e) Movies with LARGEST number of actors
+WITH ActorCounts AS (
+    SELECT m.id, m.name, m.year, COUNT(a.pid) AS num_actors
+    FROM Movie m
+    JOIN ActsIn a ON m.id = a.mid
+    GROUP BY m.id, m.name, m.year
+)
+SELECT id, name, year, num_actors
+FROM ActorCounts
+WHERE num_actors = (SELECT MAX(num_actors) FROM ActorCounts)
+ORDER BY id;
+
+-- (e) Movies with SMALLEST number of actors
+WITH ActorCounts AS (
+    SELECT m.id, m.name, m.year, COUNT(a.pid) AS num_actors
+    FROM Movie m
+    JOIN ActsIn a ON m.id = a.mid
+    GROUP BY m.id, m.name, m.year
+)
+SELECT id, name, year, num_actors
+FROM ActorCounts
+WHERE num_actors = (SELECT MIN(num_actors) FROM ActorCounts)
+ORDER BY id
+LIMIT 10;
+
+-- (f) Actors who worked with at least 10 distinct directors
+SELECT p.id, p.fname, p.lname, COUNT(DISTINCT dr.did) AS num_directors
+FROM Person p
+JOIN ActsIn a ON p.id = a.pid
+JOIN Directs dr ON a.mid = dr.mid
+GROUP BY p.id, p.fname, p.lname
+HAVING COUNT(DISTINCT dr.did) >= 10
+ORDER BY num_directors DESC
+LIMIT 10;
