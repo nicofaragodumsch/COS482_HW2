@@ -25,8 +25,8 @@ def create_tables_and_load_data():
     try:
         conn = psycopg2.connect(
             host="localhost",
-            #dbname="moviesdb", Uncomment this out before submission
-            dbname="moviedb1",# For testing purposes only
+            #dbname="moviesdb", make a temp database to avoid drop issues
+            dbname="moviesdb2",
             user="postgres",
             password=db_password
         )
@@ -350,12 +350,21 @@ def create_tables_and_load_data():
                 
                 batch = []
                 batch_size = 5000  # Larger batch size for speed
+                seen_pairs = set()  # Track (pid, mid) pairs to avoid duplicates
+                
                 for row in reader:
                     if len(row) >= 2:  # Only need pid and mid
                         try:
                             pid = int(row[0])
                             mid = int(row[1])
                             role = row[2] if len(row) > 2 else ''
+                            
+                            # Skip if we've already seen this (pid, mid) pair
+                            if (pid, mid) in seen_pairs:
+                                actsin_skipped += 1
+                                continue
+                            
+                            seen_pairs.add((pid, mid))
                             batch.append((pid, mid, role))
                             
                             if len(batch) >= batch_size:
@@ -368,10 +377,20 @@ def create_tables_and_load_data():
                                     actsin_count += len(batch)
                                     print(f"  Progress: {actsin_count} records loaded...", end='\r')
                                     batch = []
-                                except psycopg2.Error:
+                                except psycopg2.Error as e:
                                     conn.rollback()
-                                    # Skip entire batch if there are duplicates
-                                    actsin_skipped += len(batch)
+                                    # Try one by one if batch fails
+                                    for item in batch:
+                                        try:
+                                            cur.execute(
+                                                "INSERT INTO ActsIn (pid, mid, role) VALUES (%s, %s, %s)",
+                                                item
+                                            )
+                                            conn.commit()
+                                            actsin_count += 1
+                                        except psycopg2.Error:
+                                            conn.rollback()
+                                            actsin_skipped += 1
                                     batch = []
                         except (ValueError, IndexError):
                             actsin_skipped += 1
@@ -387,43 +406,32 @@ def create_tables_and_load_data():
                         actsin_count += len(batch)
                     except psycopg2.Error:
                         conn.rollback()
-                        actsin_skipped += len(batch)
+                        for item in batch:
+                            try:
+                                cur.execute(
+                                    "INSERT INTO ActsIn (pid, mid, role) VALUES (%s, %s, %s)",
+                                    item
+                                )
+                                conn.commit()
+                                actsin_count += 1
+                            except psycopg2.Error:
+                                conn.rollback()
+                                actsin_skipped += 1
                 
             print(f"\n✓ Loaded {actsin_count} acting records ({actsin_skipped} skipped)")
             
             # Now delete rows that violate foreign key constraints
             print("  Removing records with invalid person or movie IDs...")
-            # Create an index on mid to speed up the anti-join (mid-only lookups)
-            try:
-                cur.execute("CREATE INDEX IF NOT EXISTS idx_actsin_mid ON ActsIn(mid)")
-                conn.commit()
-            except psycopg2.Error:
-                conn.rollback()
-
-            # Perform deletions in batches using ctid to avoid a huge transaction
-            total_deleted = 0
-            batch_limit = 100000
-            print("  Removing records with invalid person or movie IDs (batched)...")
-            while True:
-                cur.execute("""
-                    WITH to_delete AS (
-                        SELECT ctid FROM ActsIn a
-                        WHERE NOT EXISTS (SELECT 1 FROM Person p WHERE p.id = a.pid)
-                           OR NOT EXISTS (SELECT 1 FROM Movie  m WHERE m.id = a.mid)
-                        LIMIT %s
-                    )
-                    DELETE FROM ActsIn WHERE ctid IN (SELECT ctid FROM to_delete)
-                    RETURNING 1
-                """, (batch_limit,))
-                deleted = cur.rowcount
-                conn.commit()
-                if deleted == 0:
-                    break
-                total_deleted += deleted
-                print(f"  Progress: removed {total_deleted} records...", end='\r')
-
-            print(f"\n  Removed {total_deleted} records with invalid foreign keys")
-            actsin_count -= total_deleted
+            cur.execute("""
+                DELETE FROM ActsIn 
+                WHERE pid NOT IN (SELECT id FROM Person)
+                   OR mid NOT IN (SELECT id FROM Movie)
+            """)
+            deleted = cur.rowcount
+            conn.commit()
+            print(f"  Removed {deleted} records with invalid foreign keys")
+            actsin_count -= deleted
+            
         except FileNotFoundError:
             print(f"✗ File not found: {actsin_file}")
         
@@ -440,11 +448,20 @@ def create_tables_and_load_data():
                 
                 batch = []
                 batch_size = 5000
+                seen_pairs = set()  # Track (did, mid) pairs to avoid duplicates
+                
                 for row in reader:
                     if len(row) >= 2:
                         try:
                             did = int(row[0])
                             mid = int(row[1])
+                            
+                            # Skip if we've already seen this (did, mid) pair
+                            if (did, mid) in seen_pairs:
+                                directs_skipped += 1
+                                continue
+                            
+                            seen_pairs.add((did, mid))
                             batch.append((did, mid))
                             
                             if len(batch) >= batch_size:
@@ -455,10 +472,22 @@ def create_tables_and_load_data():
                                     )
                                     conn.commit()
                                     directs_count += len(batch)
+                                    print(f"  Progress: {directs_count} records loaded...", end='\r')
                                     batch = []
-                                except psycopg2.Error:
+                                except psycopg2.Error as e:
                                     conn.rollback()
-                                    directs_skipped += len(batch)
+                                    # Try one by one if batch fails
+                                    for item in batch:
+                                        try:
+                                            cur.execute(
+                                                "INSERT INTO Directs (did, mid) VALUES (%s, %s)",
+                                                item
+                                            )
+                                            conn.commit()
+                                            directs_count += 1
+                                        except psycopg2.Error:
+                                            conn.rollback()
+                                            directs_skipped += 1
                                     batch = []
                         except (ValueError, IndexError):
                             directs_skipped += 1
@@ -474,41 +503,32 @@ def create_tables_and_load_data():
                         directs_count += len(batch)
                     except psycopg2.Error:
                         conn.rollback()
-                        directs_skipped += len(batch)
+                        for item in batch:
+                            try:
+                                cur.execute(
+                                    "INSERT INTO Directs (did, mid) VALUES (%s, %s)",
+                                    item
+                                )
+                                conn.commit()
+                                directs_count += 1
+                            except psycopg2.Error:
+                                conn.rollback()
+                                directs_skipped += 1
                 
-            print(f"✓ Loaded {directs_count} directing records ({directs_skipped} skipped)")
+            print(f"\n✓ Loaded {directs_count} directing records ({directs_skipped} skipped)")
             
             # Remove records with invalid foreign keys
             print("  Removing records with invalid director or movie IDs...")
-            # Create index on mid in Directs and delete in batches
-            try:
-                cur.execute("CREATE INDEX IF NOT EXISTS idx_directs_mid ON Directs(mid)")
-                conn.commit()
-            except psycopg2.Error:
-                conn.rollback()
-
-            total_deleted = 0
-            batch_limit = 100000
-            while True:
-                cur.execute("""
-                    WITH to_delete AS (
-                        SELECT ctid FROM Directs d
-                        WHERE NOT EXISTS (SELECT 1 FROM Director r WHERE r.id = d.did)
-                           OR NOT EXISTS (SELECT 1 FROM Movie    m WHERE m.id = d.mid)
-                        LIMIT %s
-                    )
-                    DELETE FROM Directs WHERE ctid IN (SELECT ctid FROM to_delete)
-                    RETURNING 1
-                """, (batch_limit,))
-                deleted = cur.rowcount
-                conn.commit()
-                if deleted == 0:
-                    break
-                total_deleted += deleted
-                print(f"  Progress: removed {total_deleted} records...", end='\r')
-
-            print(f"\n  Removed {total_deleted} records with invalid foreign keys")
-            directs_count -= total_deleted
+            cur.execute("""
+                DELETE FROM Directs 
+                WHERE did NOT IN (SELECT id FROM Director)
+                   OR mid NOT IN (SELECT id FROM Movie)
+            """)
+            deleted = cur.rowcount
+            conn.commit()
+            print(f"  Removed {deleted} records with invalid foreign keys")
+            directs_count -= deleted
+            
         except FileNotFoundError:
             print(f"✗ File not found: {directs_file}")
         
@@ -526,7 +546,7 @@ def create_tables_and_load_data():
         # Verify tables
         print("\nVerifying tables in moviesdb:")
         cur.execute("""
-            SELECT tablename FROM pg_catalog.pg_tables
+            SELECT tablename FROM pg_catalog.pg_tables 
             WHERE schemaname = 'public'
             ORDER BY tablename
         """)
